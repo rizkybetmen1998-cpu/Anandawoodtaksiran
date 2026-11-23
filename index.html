@@ -878,7 +878,7 @@
   <!-- TAB 3: RINGKASAN LABA -->
   <section class="tab" id="tab-laba">
     <div class="heroLaba" id="labaHero">
-      <div class="lbl">LABA BERSIH — <span id="labaHeroNama">Tebangan 1</span></div>
+      <div class="lbl"><span id="labaHeroJudul">LABA BERSIH</span> — <span id="labaHeroNama">Tebangan 1</span></div>
       <div class="num" id="labaBersihBig">Rp 0</div>
       <span class="badge" id="labaMarginBadge">Margin 0%</span>
     </div>
@@ -5549,9 +5549,14 @@ function renderLabaAngka(){
   document.getElementById('dealWrap').style.display = r.modeDeal ? 'block' : 'none';
 
   const hero = document.getElementById('labaHero');
-  hero.classList.toggle('neg', r.laba<0);
-  document.getElementById('labaBersihBig').textContent = rupiah(r.laba);
-  document.getElementById('labaMarginBadge').textContent = 'Margin ' + r.margin.toFixed(1) + '%';
+  // Tebangan yang belum selesai: sebagian kayu masih jadi stok, jadi angkanya
+  // belum laba/rugi — tampilkan sebagai modal yang masih tertanam.
+  const berjalan = t.status !== 'selesai';
+  hero.classList.toggle('neg', !berjalan && r.laba<0);
+  document.getElementById('labaHeroJudul').textContent = !berjalan ? 'LABA BERSIH'
+    : (r.laba < 0 ? 'SEMENTARA · MODAL MASIH TERTANAM' : 'SEMENTARA · LABA SEJAUH INI');
+  document.getElementById('labaBersihBig').textContent = rupiah(berjalan && r.laba < 0 ? -r.laba : r.laba);
+  document.getElementById('labaMarginBadge').textContent = berjalan ? 'Belum selesai' : 'Margin ' + r.margin.toFixed(1) + '%';
 
   document.getElementById('rc_taksiran').textContent = rupiah(r.taksiran);
   document.getElementById('rc_deal').textContent = rupiah(r.deal);
@@ -5699,8 +5704,18 @@ function renderRekap(){
   let grandLaba = 0, grandJual = 0, grandBeli = 0, grandOps = 0;
   state.tebanganList.forEach(t=>{
     const r = hitungLabaTebangan(t);
-    grandLaba += r.laba; grandJual += r.pendapatan;
-    grandBeli += r.biayaBeli; grandOps += r.opsCalc.totalOps;
+    const berjalan = t.status !== 'selesai';
+    const beres = dataBeres(t);
+    // Total hanya dari tebangan yang selesai dan uangnya sudah beres
+    if(beres){
+      grandLaba += r.laba; grandJual += r.pendapatan;
+      grandBeli += r.biayaBeli; grandOps += r.opsCalc.totalOps;
+    }
+    const tanda = berjalan ? ' <span style="font-size:10.5px; color:#a4906f; font-weight:700;">· berjalan</span>'
+      : (!beres ? ' <span style="font-size:10.5px; color:#a4906f; font-weight:700;">· uang belum beres</span>' : '');
+    const angka = berjalan
+      ? `<div class="rekapVal" style="font-weight:800; color:var(--brown-700);">${r.laba < 0 ? 'tertanam ' + rupiah(-r.laba) : rupiah(r.laba)}</div>`
+      : `<div class="rekapVal ${r.laba<0?'neg':'pos'}" style="font-weight:800;">${rupiah(r.laba)}</div>`;
 
     const row = document.createElement('div');
     row.className = 'rekapRow';
@@ -5710,8 +5725,8 @@ function renderRekap(){
     const basis = r.modeDeal ? 'deal' : 'taksiran';
     row.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:baseline;">
-        <div class="nm">${aktif?'▸ ':''}${t.nama}${t.lokasi?` <span class="loc" style="display:inline">· ${t.lokasi}</span>`:''}</div>
-        <div class="rekapVal ${r.laba<0?'neg':'pos'}" style="font-weight:800;">${rupiah(r.laba)}</div>
+        <div class="nm">${aktif?'▸ ':''}${t.nama}${t.lokasi?` <span class="loc" style="display:inline">· ${t.lokasi}</span>`:''}${tanda}</div>
+        ${angka}
       </div>
       <div style="font-size:11px; color:#a4906f; margin-top:3px;">
         Jual <span class="rekapVal">${rupiah(r.pendapatan)}</span> −
@@ -5731,7 +5746,7 @@ function renderRekap(){
   const gMargin = grandJual>0 ? (grandLaba/grandJual*100) : 0;
   totalRow.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:baseline;">
-      <div class="nm">TOTAL SEMUA TEBANGAN</div>
+      <div class="nm">TOTAL TEBANGAN SELESAI</div>
       <div class="rekapVal ${grandLaba<0?'neg':'pos'}" style="font-weight:800;">${rupiah(grandLaba)}</div>
     </div>
     <div style="font-size:11px; color:#8a7a63; margin-top:3px; font-weight:600;">
@@ -5741,6 +5756,17 @@ function renderRekap(){
       · Margin ${gMargin.toFixed(1)}%
     </div>`;
   box.appendChild(totalRow);
+  // Tebangan berjalan dipisah: modalnya masih tertanam di kayu, belum laba/rugi
+  const tertanam = hitungModalTertanam().reduce((j,x)=> j + Math.max(0, x.tertanam), 0);
+  if(tertanam > 0){
+    const rowT = document.createElement('div');
+    rowT.className = 'rekapRow';
+    rowT.style.display = 'block';
+    rowT.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <div class="nm">Modal masih tertanam <span style="font-size:10.5px; color:#a4906f;">(tebangan berjalan)</span></div>
+      <div class="rekapVal" style="font-weight:800; color:var(--brown-700);">${rupiah(tertanam)}</div></div>`;
+    box.appendChild(rowT);
+  }
 }
 
 // Laba Bersih per Bulan: dikumpulkan dari SEMUA tebangan, bukan cuma yang aktif.
