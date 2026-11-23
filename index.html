@@ -195,10 +195,10 @@
   .chipKondisi{padding:8px 13px; border-radius:20px; border:1.5px solid var(--line); background:#fff; color:#8a7a63; font-size:12.5px; font-weight:700;}
   .chipKondisi.aktif{background:var(--red-bg); border-color:var(--red); color:var(--red);}
   .chipKondisi.bagus.aktif{background:var(--green-bg); border-color:var(--green); color:var(--green);}
-  .chipJenis, .chipTupai{padding:8px 13px; border-radius:20px; border:1.5px solid var(--line); background:#fff; color:#8a7a63; font-size:12.5px; font-weight:700;}
+  .chipJenis, .chipTupai, .chipAkses{padding:8px 13px; border-radius:20px; border:1.5px solid var(--line); background:#fff; color:#8a7a63; font-size:12.5px; font-weight:700;}
   .chipJenis.aktif{background:var(--cream-2); border-color:var(--brown-600); color:var(--brown-800);}
   .chipJenis.bagus.aktif{background:var(--green-bg); border-color:var(--green); color:var(--green);}
-  .chipTupai.aktif{background:#fdf3e0; border-color:#d79a1e; color:#8a6412;}
+  .chipTupai.aktif, .chipAkses.aktif{background:#fdf3e0; border-color:#d79a1e; color:#8a6412;}
   .alasanBox{margin-top:10px; padding:10px 12px; border:1.5px solid var(--line); border-radius:12px; background:var(--cream);}
   .alasanBox h3{margin:0 0 6px; font-size:12.5px; color:var(--brown-800);}
   .alasanBaris{display:flex; gap:8px; align-items:flex-start; padding:6px 0; border-top:1px solid var(--line); font-size:12px; line-height:1.45; color:var(--brown-800);}
@@ -657,6 +657,12 @@
             <button type="button" class="chipTupai" data-tupai="1">Sedikit</button>
             <button type="button" class="chipTupai" data-tupai="2">Sedang</button>
             <button type="button" class="chipTupai" data-tupai="3">Banyak</button>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px;">
+            <span style="font-size:12px; font-weight:700; color:var(--brown-700); margin-right:2px;">Akses:</span>
+            <button type="button" class="chipAkses" data-akses="1">Dekat</button>
+            <button type="button" class="chipAkses" data-akses="2">Sedang</button>
+            <button type="button" class="chipAkses" data-akses="3">Jauh/sulit</button>
           </div>
         </div>
         <div style="display:flex; gap:6px;">
@@ -2980,6 +2986,13 @@ function tingkatTupai(x){
   return (x && x.tupai === true) ? 2 : 0;
 }
 function namaTupai(v){ return ['belum diisi','sedikit','sedang','banyak'][v] || 'belum diisi'; }
+// Akses ke kebun: 0 = belum diisi, 1 dekat, 2 sedang, 3 jauh/sulit.
+// Paling berpengaruh ke biaya operasional (angkut, galang, BBM).
+function tingkatAkses(x){
+  const v = Number(x && x.akses);
+  return (v >= 1 && v <= 3) ? v : 0;
+}
+function namaAkses(v){ return ['belum diisi','dekat','sedang','jauh/sulit'][v] || 'belum diisi'; }
 document.querySelectorAll('.chipJenis').forEach(b=>{
   b.addEventListener('click', ()=>{
     const t = getActive();
@@ -3004,8 +3017,19 @@ document.querySelectorAll('.chipTupai').forEach(b=>{
     if(typeof renderAkurasi === 'function') renderAkurasi();
   });
 });
+document.querySelectorAll('.chipAkses').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const t = getActive(), v = Number(b.dataset.akses);
+    t.akses = (tingkatAkses(t) === v) ? 0 : v;         // ketuk lagi = kosongkan
+    save(); renderIdentitas(); renderSaranBeli();
+    if(typeof renderAkurasi === 'function') renderAkurasi();
+  });
+});
 function renderIdentitas(){
   const t = getActive();
+  document.querySelectorAll('.chipAkses').forEach(b=>{
+    b.classList.toggle('aktif', Number(b.dataset.akses) === tingkatAkses(t));
+  });
   document.querySelectorAll('.chipJenis').forEach(b=>{
     b.classList.toggle('aktif', (b.dataset.jenis === 'istimewa') === (t.istimewa === true));
   });
@@ -6131,6 +6155,7 @@ function kumpulkanAkurasi(){
       nama: t.nama,
       lokasi: t.lokasi || '',
       tupaiLevel: tingkatTupai(t),
+      akses: tingkatAkses(t),
       istimewa: t.istimewa === true,
       pKecil: pengaliKelompok(t, 50),
       pBesar: pengaliKelompok(t, 100),
@@ -6211,19 +6236,20 @@ function namaKondisi(x){
   return ada.length ? ada.join(' + ') : 'kayu biasa';
 }
 function kunciLokasi(v){ return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
-function ciriTebangan(t){ return {kunci: kunciKondisi(t), istimewa: t.istimewa === true, kelas: kelasTinggi(pengaliKelompok(t, 100)), tupai: tingkatTupai(t), lokasi: kunciLokasi(t.lokasi), lokasiNama: t.lokasi || ''}; }
-function ciriData(x){ return {kunci: kunciKondisi(x), istimewa: x.istimewa === true, kelas: kelasTinggi(x.pBesar), tupai: tingkatTupai(x), lokasi: kunciLokasi(x.lokasi), lokasiNama: x.lokasi || ''}; }
+function ciriTebangan(t){ return {akses: tingkatAkses(t), kunci: kunciKondisi(t), istimewa: t.istimewa === true, kelas: kelasTinggi(pengaliKelompok(t, 100)), tupai: tingkatTupai(t), lokasi: kunciLokasi(t.lokasi), lokasiNama: t.lokasi || ''}; }
+function ciriData(x){ return {akses: tingkatAkses(x), kunci: kunciKondisi(x), istimewa: x.istimewa === true, kelas: kelasTinggi(x.pBesar), tupai: tingkatTupai(x), lokasi: kunciLokasi(x.lokasi), lokasiNama: x.lokasi || ''}; }
 function rataBobot(arr, f){
   let b = 0, j = 0;
   arr.forEach(x=>{ const w = (x.taksiran > 0 ? x.taksiran : 1) * bobotWaktu(x); b += w; j += f(x) * w; });
   return b > 0 ? j / b : null;
 }
 function tarik(nilaiKel, n, induk, k){ return (nilaiKel === null || n === 0) ? induk : (n * nilaiKel + k * induk) / (n + k); }
-// Urutan: semua -> jenis (normal/istimewa) -> + tinggi -> + tingkat tupai -> + lokasi.
+// Urutan: semua -> jenis (normal/istimewa) -> + akses -> + tinggi -> + tingkat tupai -> + lokasi.
 // Langkah yang belum diisi (tupai/lokasi kosong) dilewati.
 function langkahKemiripan(ciri){
   const L = [
     {nama: 'Jenis sama: ' + (ciri.istimewa ? 'kayu istimewa' : 'kayu normal'), cocok: x=> kunciKondisi(x) === ciri.kunci},
+    ...(ciri.akses ? [{nama: '+ akses ' + namaAkses(ciri.akses), cocok: x=> tingkatAkses(x) === ciri.akses}] : []),
     {nama: '+ tinggi ' + namaKelas(ciri.kelas), cocok: x=> kelasTinggi(x.pBesar) === ciri.kelas}
   ];
   if(ciri.tupai) L.push({nama: '+ bekas tupai ' + namaTupai(ciri.tupai), cocok: x=> tingkatTupai(x) === ciri.tupai});
@@ -6314,6 +6340,7 @@ function renderLengkapi(){
     if(!String(t.lokasi || '').trim()) k.push('lokasi');
     if(!(t.jenisDipilih === true || t.istimewa === true)) k.push('jenis kayu (normal/istimewa)');
     if(!tingkatTupai(t)) k.push('tingkat bekas tupai');
+    if(!tingkatAkses(t)) k.push('akses (dekat/sedang/jauh)');
     if(totalJual(t) <= 0) k.push('hasil jual');
     if(k.length) kurang.push({t, k});
   });
