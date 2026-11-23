@@ -3554,8 +3554,10 @@ function renderSaranBeli(){
   const deal = Number(t.hargaDeal)||0;
   let bandingDeal = '';
   if(deal > 0){
-    const beda = deal - batasBeli;
-    const labaKalauDeal = jual - ops - deal;
+    // calo & fee ikut dihitung: batas beli adalah total modal
+    const modalDeal = deal + caloFee;
+    const beda = modalDeal - batasBeli;
+    const labaKalauDeal = jual - ops - modalDeal;
     const aman = beda <= 0;
     bandingDeal = `
       <div class="statLine" style="background:${aman?'var(--green-bg)':'var(--red-bg)'}; border-radius:10px; padding:10px 12px; margin-top:8px;">
@@ -3567,6 +3569,7 @@ function renderSaranBeli(){
         </span>
         <span style="text-align:right; white-space:nowrap;">
           <span class="val" style="display:block; font-weight:800;">${rupiah(deal)}</span>
+          ${caloFee > 0 ? `<span style="display:block; font-size:10.5px; color:#a4906f;">+ calo &amp; fee ${rupiah(caloFee)}</span>` : ''}
           <span style="font-size:10.5px; color:${labaKalauDeal<0?'var(--red)':'var(--green)'};">perkiraan laba ${rupiah(labaKalauDeal)}</span>
         </span>
       </div>`;
