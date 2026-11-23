@@ -5773,7 +5773,7 @@ function renderRekap(){
         Jual <span class="rekapVal">${rupiah(r.pendapatan)}</span> −
         Beli <span class="rekapVal">${rupiah(r.biayaBeli)}</span> (${basis}) −
         Ops <span class="rekapVal">${rupiah(r.opsCalc.totalOps)}</span>
-        · Margin ${r.margin.toFixed(1)}%
+        ${berjalan ? '' : '· Margin ' + r.margin.toFixed(1) + '%'}
       </div>`;
     row.addEventListener('click', ()=>{
       state.activeTebanganId = t.id;
