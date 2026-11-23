@@ -3296,14 +3296,14 @@ function buatCocokSelesai(t){
       <span class="lbl" style="font-size:12px;">Belum bisa dicocokkan — perlu tebangan selesai lain sebagai pembanding.</span></div>`;
   }
 
-  // yang DISARANKAN dulu
-  const jualSaran = taksiran * stat.rataJual;
-  const labaSaran = taksiran * stat.rataLaba;
-  let porsiOps = 0;
-  lain.forEach(x=> porsiOps += x.ops / x.jual);
-  porsiOps = porsiOps / lain.length;
-  const opsSaran = jualSaran * porsiOps;
-  const beliSaran = jualSaran - opsSaran - labaSaran;
+  // yang DISARANKAN: rumus yang sama dengan kartu Saran Harga Beli
+  // (perkiraan bertingkat dari tebangan mirip + target laba Bersaing)
+  const pilihan = pilihK(lain);
+  const bert = perkiraanBertingkat(ciriTebangan(t), lain, pilihan.k);
+  const jualSaran = taksiran * bert.jual;
+  const opsSaran = jualSaran * (bert.ops > 0 ? bert.ops : 0.3);
+  const labaSaran = jualSaran * targetLabaBersaing() / 100;
+  const beliSaran = jualSaran - opsSaran - labaSaran;     // = Batas Bersaing (total modal)
 
   // yang TERJADI
   const jualNyata = r.pendapatan;
