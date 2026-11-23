@@ -533,6 +533,12 @@
   details.lipat > summary::after{content:'\25BE'; margin-left:auto; color:var(--brown-600); font-size:12px;}
   details.lipat[open] > summary::after{content:'\25B4';}
   details.lipat > summary h2{margin:0;}
+  /* Sub-tab di dalam satu kelompok (Operasional, Laporan) */
+  #subNav{display:flex; gap:6px; overflow-x:auto; padding:2px 0 10px; scrollbar-width:none;}
+  #subNav::-webkit-scrollbar{display:none;}
+  #subNav:empty{display:none;}
+  #subNav button{flex:0 0 auto; padding:7px 13px; border-radius:999px; border:1.5px solid var(--line); background:#fff; color:#8a7a63; font-size:12px; font-weight:700; white-space:nowrap;}
+  #subNav button.active{background:var(--brown-700); border-color:var(--brown-700); color:#fff;}
 </style>
 </head>
 <body>
@@ -596,15 +602,11 @@
 </header>
 
 <nav id="tabNav">
-  <button data-tab="beli" class="active" id="tabBtnBeli">Beli Kayu</button>
-  <button data-tab="daftar">Rekap Tebangan</button>
-  <button data-tab="ops">Operasional</button>
-  <button data-tab="rekap">Rekap Ops</button>
-  <button data-tab="laba">Ringkasan Laba</button>
-  <button data-tab="bulanan">Pendapatan Bulan</button>
-  <button data-tab="anggaran">Selesai</button>
-  <button data-tab="akurasi">Akurasi</button>
-  <button data-tab="setting">Pengaturan</button>
+  <button data-tab="beli" data-grup="beli" class="active" id="tabBtnBeli">Beli Kayu</button>
+  <button data-tab="ops" data-grup="ops">Operasional</button>
+  <button data-tab="laba" data-grup="laba">Laba</button>
+  <button data-tab="bulanan" data-grup="laporan">Laporan</button>
+  <button data-tab="setting" data-grup="setting">Pengaturan</button>
 </nav>
 
 <div id="barisUndo" style="position:fixed; right:12px; bottom:16px; z-index:60; display:flex; align-items:center; gap:8px;">
@@ -637,6 +639,7 @@
 
 
 <main id="privWrap">
+  <div id="subNav"></div>
 
   <!-- TAB 1: BELI KAYU -->
   <section class="tab active" id="tab-beli">
@@ -1801,7 +1804,15 @@ function hargaUntukLilitan(lil, jenis){
 
 // ---------- MAIN NAV ----------
 // Arah animasi mengikuti urutan tab: maju ke kanan -> isi masuk dari kanan.
-const URUT_TAB = ['beli','daftar','ops','rekap','laba','bulanan','anggaran','akurasi','setting'];
+const URUT_TAB = ['beli','ops','rekap','laba','bulanan','daftar','anggaran','akurasi','setting'];
+// 9 halaman dikelompokkan jadi 5 tombol tab. Kelompok yang isinya lebih dari
+// satu halaman menampilkan sub-tab kecil di atas isi halaman.
+const GRUP_TAB = {beli:'beli', ops:'ops', rekap:'ops', laba:'laba', bulanan:'laporan', daftar:'laporan', anggaran:'laporan', akurasi:'laporan', setting:'setting'};
+const SUB_TAB = {
+  ops: [['ops','Biaya Harian'], ['rekap','Rekap Ops']],
+  laporan: [['bulanan','Pendapatan Bulan'], ['daftar','Rekap Tebangan'], ['anggaran','Selesai'], ['akurasi','Akurasi']]
+};
+const subTerakhir = {};   // sub-tab terakhir yang dibuka di tiap kelompok
 let tabSekarang = 'beli';
 async function renderRiwayat(){
   const box = document.getElementById('daftarRiwayat');
@@ -1833,7 +1844,15 @@ function pindahTab(kunciTab){
   const dari = URUT_TAB.indexOf(tabSekarang), ke = URUT_TAB.indexOf(kunciTab);
   const mundur = (dari !== -1 && ke !== -1 && ke < dari);
   tabSekarang = kunciTab;
-  document.querySelectorAll('#tabNav button').forEach(b=> b.classList.toggle('active', b.dataset.tab===kunciTab));
+  const grup = GRUP_TAB[kunciTab] || kunciTab;
+  subTerakhir[grup] = kunciTab;
+  document.querySelectorAll('#tabNav button').forEach(b=> b.classList.toggle('active', b.dataset.grup===grup));
+  const sub = document.getElementById('subNav');
+  if(sub){
+    sub.innerHTML = (SUB_TAB[grup] || []).map(([k, nama])=>
+      `<button type="button" data-sub="${k}" class="${k===kunciTab?'active':''}">${nama}</button>`).join('');
+    sub.querySelectorAll('[data-sub]').forEach(b=> b.addEventListener('click', ()=> pindahTab(b.dataset.sub)));
+  }
   document.querySelectorAll('.tab').forEach(t=>{ t.classList.remove('active'); t.classList.remove('dariKiri'); });
   const el = document.getElementById('tab-'+kunciTab);
   if(mundur) el.classList.add('dariKiri');
@@ -1841,7 +1860,7 @@ function pindahTab(kunciTab){
   document.getElementById('tebanganBar').style.display = (kunciTab==='daftar'||kunciTab==='anggaran'||kunciTab==='setting'||kunciTab==='bulanan'||kunciTab==='akurasi') ? 'none' : 'block';
 }
 document.querySelectorAll('#tabNav button').forEach(btn=>{
-  btn.addEventListener('click', ()=> pindahTab(btn.dataset.tab));
+  btn.addEventListener('click', ()=> pindahTab(subTerakhir[btn.dataset.grup] || btn.dataset.tab));
 });
 
 // Geser jari ke kiri/kanan untuk pindah tab. Isi halaman TIDAK diseret
