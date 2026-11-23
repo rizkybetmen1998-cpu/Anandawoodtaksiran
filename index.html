@@ -944,6 +944,7 @@
       <div class="statLine"><span class="lbl">LABA BERSIH</span><span class="val" id="rc_laba">Rp 0</span></div>
       <div class="statLine"><span class="lbl">Margin vs Hasil Jual</span><span class="val" id="rc_marginJual">0%</span></div>
       <div class="statLine"><span class="lbl">Margin vs Modal Beli</span><span class="val" id="rc_marginModal">0%</span></div>
+      <div class="statLine"><span class="lbl">Untung vs Total Modal<br><span style="font-size:10.5px; color:#a4906f;">laba ÷ (beli + operasional)</span></span><span class="val" id="rc_roi">0%</span></div>
       <div class="statLine"><span class="lbl">Total Isi Kayu</span><span class="val" id="rc_isi">0 dm3</span></div>
       <div class="statLine"><span class="lbl">Biaya Beli per m³ Isi</span><span class="val" id="rc_perm3">Rp 0</span></div>
     </div>
@@ -5600,6 +5601,8 @@ function renderLabaAngka(){
   document.getElementById('rc_laba').textContent = rupiah(r.laba);
   document.getElementById('rc_marginJual').textContent = r.margin.toFixed(1) + '%';
   document.getElementById('rc_marginModal').textContent = r.marginModal.toFixed(1) + '%';
+  const totalModal = r.biayaBeli + r.opsCalc.totalOps;
+  document.getElementById('rc_roi').textContent = (totalModal > 0 ? (r.laba / totalModal * 100) : 0).toFixed(1) + '%';
   document.getElementById('rc_isi').textContent = num(r.beliCalc.totalIsi,0) + ' dm3';
   document.getElementById('rc_perm3').textContent = rupiah(perM3);
 
