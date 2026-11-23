@@ -1111,6 +1111,15 @@
     </div>
 
     <div class="card">
+      <h2>Target Laba Saran Beli</h2>
+      <p class="sub">Dipakai kartu Saran Harga Beli: Batas Aman dan Batas Bersaing dihitung supaya labanya sebesar persen ini dari hasil jual. Titik Impas = laba nol.</p>
+      <div class="grid2">
+        <div class="field"><label>Batas Aman (% laba)</label><input type="text" inputmode="numeric" id="targetAman"></div>
+        <div class="field"><label>Batas Bersaing (% laba)</label><input type="text" inputmode="numeric" id="targetBersaing"></div>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>Harga Albasia (Rp/dm3)</h2>
       <p class="sub">Urut dari lilitan kecil ke besar.</p>
       <div id="albTierBody"></div>
@@ -2748,6 +2757,22 @@ function renderAlbasia(){
     });
   });
 }
+function renderTargetLaba(){
+  const a = document.getElementById('targetAman'), b = document.getElementById('targetBersaing');
+  if(a && document.activeElement !== a) a.value = targetLabaAman();
+  if(b && document.activeElement !== b) b.value = targetLabaBersaing();
+}
+[['targetAman','targetAman'], ['targetBersaing','targetBersaing']].forEach(([id, kunci])=>{
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('input', ()=>{
+    const v = parseInt(String(el.value).replace(/[^0-9]/g,''),10);
+    if(isFinite(v) && v >= 0 && v < 100){
+      state.settings[kunci] = v;
+      save(); renderSaranBeli();
+    }
+  });
+});
 document.getElementById('albK1').addEventListener('input', e=>{
   const v = parseInt(String(e.target.value).replace(/[^0-9]/g,''),10);
   if(isFinite(v) && v > 0){
@@ -3243,6 +3268,13 @@ function persenOps(t){
   const p = Number(t.persenOps);
   return (isFinite(p) && p > 0) ? p : 30;
 }
+// Target laba untuk Saran Harga Beli (persen dari hasil jual), diatur di Pengaturan.
+function bacaTarget(kunci, bawaan){
+  const v = Number(state.settings && state.settings[kunci]);
+  return (isFinite(v) && v >= 0 && v < 100) ? v : bawaan;
+}
+function targetLabaAman(){ return bacaTarget('targetAman', 25); }
+function targetLabaBersaing(){ return bacaTarget('targetBersaing', 20); }
 
 // Saran harga beli untuk tebangan yang sedang ditaksir, memakai pola dari
 // tebangan yang sudah selesai (taksiran → hasil jual → laba).
@@ -3326,6 +3358,7 @@ function buatCocokSelesai(t){
     </div>`;
 }
 
+var saranRinciBuka = false;   // rincian Saran Harga Beli terbuka/tertutup
 function renderSaranBeli(){
   const kartu = document.getElementById('kartuSaranBeli');
   const box = document.getElementById('saranBeli');
@@ -3360,7 +3393,7 @@ function renderSaranBeli(){
   const judul = kartu.querySelector('h2');
   if(judul) judul.textContent = '💡 Saran Harga Beli';
   const sub = kartu.querySelector('p.sub');
-  if(sub) sub.textContent = 'Dihitung dari pola tebangan yang sudah selesai — berapa taksiran seperti ini biasanya jadi uang masuk dan untung.';
+  if(sub) sub.textContent = 'Dari pola tebangan yang sudah selesai.';
   kartu.style.borderLeftColor = 'var(--green)';
   if(taksiran <= 0 || !stat){
     const kurang = [];
@@ -3498,10 +3531,21 @@ function renderSaranBeli(){
         '<div class="alasanBaris"><i class="' + a.tanda + '">' + SIMBOL[a.tanda] + '</i><span>' + a.teks + '</span></div>').join('') + '</div>';
   // Bawaannya memakai angka yang DIPELAJARI dari tebangan Bapak yang sudah
   // selesai. Tombol persen hanya untuk menimpa kalau lokasinya luar biasa.
-  const pOps = persenOps(t);
-  const ops = jual * (pOps/100);
-  const batasBeli = jual - ops - laba;
-  const tawarAwal = batasBeli * 0.9;        // mulai menawar 10% di bawah batas
+  // Operasional: bawaannya dari tebangan selesai yang mirip (perkiraan bertingkat).
+  // Tombol / isian persen hanya menimpa untuk tebangan ini kalau lokasinya luar biasa.
+  const opsData = (stat.porsiOps > 0) ? Math.round(stat.porsiOps * 1000) / 10 : 30;
+  const opsDitimpa = Number(t.persenOps) > 0;
+  const pOps = opsDitimpa ? Number(t.persenOps) : opsData;
+  // Tiga batas: dihitung dari target laba (Pengaturan), bukan dari laba rata-rata dulu.
+  const tAman = targetLabaAman(), tSaing = targetLabaBersaing();
+  const caloFee = (Number(t.ongkosCalo)||0) + (Number(t.fee)||0);
+  const hitungBatas = p=>{
+    const o = jual * (p/100);
+    return {ops:o, aman: jual - o - jual*tAman/100, bersaing: jual - o - jual*tSaing/100, impas: jual - o};
+  };
+  const B = hitungBatas(pOps);
+  const ops = B.ops;
+  const batasBeli = B.bersaing;             // patokan Pilihan Tawar & per dm3
 
   const namaContoh = data.map(x=> x.nama).join(', ');
   // berapa persen operasional sebenarnya di tebangan yang sudah selesai
@@ -3528,8 +3572,9 @@ function renderSaranBeli(){
       </div>`;
   }
 
-  const tombol = [30,40,50].map(p=>
-    `<button class="modeBtn ${p===pOps?'active':''}" data-persenops="${p}" style="flex:1;">${p}%</button>`
+  const tombol = `<button class="modeBtn ${!opsDitimpa?'active':''}" data-persenops="data" style="flex:1.4;">Data ${String(opsData).replace('.', ',')}%</button>`
+    + [30,40,50].map(p=>
+    `<button class="modeBtn ${opsDitimpa && p===pOps?'active':''}" data-persenops="${p}" style="flex:1;">${p}%</button>`
   ).join('');
 
   // --- angka tambahan yang berguna saat menawar di kebun ---
@@ -3539,25 +3584,16 @@ function renderSaranBeli(){
   const isiAlb = isiTotal - lad.isi;
   const nilaiAlb = taksiran - lad.nilai;
   // batas harga per dm3 dan per kubik — ini yang dipakai tawar ke petani
-  const batasPerDm3 = isiTotal > 0 ? batasBeli / isiTotal : 0;
+  const batasPerDm3 = isiTotal > 0 ? (batasBeli - caloFee) / isiTotal : 0;   // harga ke petani per dm3
   const marginPersen = jual > 0 ? (laba / jual * 100) : 0;
-  // titik impas: di harga beli berapa labanya jadi nol
-  const impas = jual - ops;
-
-  // tiga pilihan tawar beserta akibatnya ke laba
-  const skenario = [
-    {nama:'Aman',   warna:'var(--green)',     harga: batasBeli * 0.85},
-    {nama:'Sedang', warna:'var(--brown-700)', harga: batasBeli * 0.93},
-    {nama:'Batas',  warna:'var(--red)',       harga: batasBeli}
-  ].map(s=>{
-    const labaS = jual - ops - s.harga;
-    return `<div class="statLine" style="padding:5px 0;">
-      <span class="lbl" style="font-size:12px;"><b style="color:${s.warna};">${s.nama}</b> · ${rupiah(s.harga)}<br>
-        <span style="font-size:10.5px; color:#a4906f;">${isiTotal>0 ? 'Rp ' + num(s.harga/isiTotal,0) + '/dm3' : ''}</span>
-      </span>
-      <span class="val" style="font-size:12px; color:${labaS<0?'var(--red)':'var(--green)'};">laba ${rupiah(labaS)}</span>
+  // satu baris batas: total modal, dan (kalau ada calo/fee) harga ke petani
+  // satu baris batas ringkas: angka = harga ke petani (sudah dikurangi calo & fee)
+  const barisBatas = (id, judul, persen, nilai, warna)=> `
+    <div class="statLine" style="padding:7px 0;">
+      <span class="lbl" style="font-weight:800; color:${warna};">${judul} <span style="font-weight:600; font-size:11px; color:#a4906f;">laba ${persen}%</span></span>
+      <span class="val" id="${id}" style="font-weight:800; font-size:15px; color:${warna};">${rupiah(nilai - caloFee)}</span>
     </div>`;
-  }).join('');
+  const barisModal = (id, judul, nilai)=> `<div class="statLine" style="padding:4px 0;"><span class="lbl" style="font-size:12px;">${judul}</span><span class="val" id="${id}T" style="font-size:12px;">${rupiah(nilai)}</span></div>`;
 
   const rincianJenis = lad.nilai > 0
     ? `<div class="statLine" style="padding:4px 0;">
@@ -3569,74 +3605,72 @@ function renderSaranBeli(){
     : '';
 
   box.innerHTML = `
-    <div class="statLine" style="background:var(--green-bg); border-radius:10px; padding:12px; margin-bottom:8px;">
-      <span class="lbl" style="font-weight:800;">SEBAIKNYA BELI MAKSIMAL<br>
-        <span style="font-size:10.5px; font-weight:600; color:#8a7a63;">di atas ini untung mulai menipis</span>
-      </span>
-      <span class="val" style="font-weight:800; font-size:16px; color:var(--green);">${rupiah(batasBeli)}</span>
-    </div>
-    <div class="statLine" style="background:var(--cream-2); border-radius:10px; padding:10px 12px; margin-bottom:8px;">
-      <span class="lbl" style="font-weight:800;">PATOKAN PER DM3<br>
-        <span style="font-size:10.5px; font-weight:600; color:#8a7a63;">batas beli dibagi ${num(isiTotal,0)} dm3</span>
-      </span>
-      <span style="text-align:right; white-space:nowrap;">
-        <span class="val" style="display:block; font-weight:800;">Rp ${num(batasPerDm3,0)}/dm3</span>
-        <span style="font-size:10.5px; color:#a4906f;">Rp ${num(batasPerDm3*1000,0)}/kubik</span>
-      </span>
-    </div>
+    <div style="font-size:11px; font-weight:700; color:#a4906f; letter-spacing:.3px;">HARGA KE PETANI</div>
+    ${barisBatas('sbAman', 'AMAN', tAman, B.aman, 'var(--green)')}
+    ${barisBatas('sbBersaing', 'BERSAING', tSaing, B.bersaing, 'var(--brown-700)')}
+    ${barisBatas('sbImpas', 'IMPAS', 0, B.impas, 'var(--red)')}
+    <p class="miniHelp" style="margin:4px 0 0;">Patokan <b id="sbPerDm3">Rp ${num(batasPerDm3,0)}/dm3</b> · Operasional <b>${String(pOps).replace('.', ',')}%</b></p>
+    ${bandingDeal}
 
-    <div class="section-title">Pilihan Tawar</div>
-    ${skenario}
+    <details id="saranRinci" style="margin-top:10px;" ${saranRinciBuka ? 'open' : ''}>
+      <summary style="cursor:pointer; font-size:12.5px; font-weight:700; color:var(--brown-700);">Lihat rincian</summary>
 
-    <div class="section-title">Rincian</div>
-    <div class="statLine"><span class="lbl">Taksiran kayu ini</span><span class="val">${rupiah(taksiran)}</span></div>
-    ${rincianJenis}
-    <div class="statLine"><span class="lbl">Perkiraan hasil jual<br><span style="font-size:10.5px; color:#a4906f;">taksiran × ${stat.rataJual.toFixed(3)}</span></span><span class="val">${rupiah(jual)}</span></div>
+      <div class="section-title">Total modal${caloFee > 0 ? ' (termasuk calo &amp; fee ' + rupiah(caloFee) + ')' : ''}</div>
+      ${barisModal('sbAman', 'Aman', B.aman)}
+      ${barisModal('sbBersaing', 'Bersaing', B.bersaing)}
+      ${barisModal('sbImpas', 'Impas', B.impas)}
 
-    <div style="margin:10px 0 6px;">
-      <div style="font-size:11px; font-weight:700; color:var(--brown-700); margin-bottom:6px;">
-        Operasional ${pOps}% dari hasil jual
-        <span style="font-weight:500; color:#a4906f;">· dekat 30%, jauh 50%</span>
-      </div>
+      <div class="section-title">Perkiraan</div>
+      <div class="statLine"><span class="lbl">Taksiran kayu ini</span><span class="val">${rupiah(taksiran)}</span></div>
+      ${rincianJenis}
+      <div class="statLine"><span class="lbl">Hasil jual <span style="font-size:10.5px; color:#a4906f;">taksiran × ${stat.rataJual.toFixed(3)}</span></span><span class="val">${rupiah(jual)}</span></div>
+      <div class="statLine"><span class="lbl">Biaya operasional</span><span class="val" id="sbOps">${rupiah(ops)}</span></div>
+      <div class="statLine"><span class="lbl">Laba rata-rata dulu <span style="font-size:10.5px; color:#a4906f;">${marginPersen.toFixed(1)}%</span></span><span class="val" style="color:${laba<0?'var(--red)':'var(--green)'};">${rupiah(laba)}</span></div>
+
+      <div class="section-title">Operasional ${opsDitimpa ? '(manual)' : '(dari data)'}</div>
       <div style="display:flex; gap:6px; margin-bottom:6px;">${tombol}</div>
       <div style="display:flex; align-items:center; gap:8px;">
-        <input type="text" inputmode="numeric" id="inputPersenOps" value="${pOps}"
+        <input type="text" inputmode="decimal" id="inputPersenOps" value="${String(pOps).replace('.', ',')}"
           style="width:70px; border:1px solid var(--line); border-radius:8px; padding:8px; font-size:13px; text-align:center; background:#fff;">
-        <span style="font-size:11.5px; color:#a4906f;">% — isi sendiri kalau perlu</span>
+        <span style="font-size:11.5px; color:#a4906f;">% isi sendiri</span>
       </div>
-    </div>
 
-    <div class="statLine"><span class="lbl">Perkiraan biaya operasional</span><span class="val">${rupiah(ops)}</span></div>
-    <div class="statLine"><span class="lbl">Perkiraan laba bersih<br><span style="font-size:10.5px; color:#a4906f;">margin ${marginPersen.toFixed(1)}% dari hasil jual</span></span><span class="val" style="color:${laba<0?'var(--red)':'var(--green)'};">${rupiah(laba)}</span></div>
-    <div class="statLine"><span class="lbl">Titik impas (laba nol)<br><span style="font-size:10.5px; color:#a4906f;">di atas ini pasti rugi</span></span><span class="val" style="color:var(--red);">${rupiah(impas)}</span></div>
-    ${bandingDeal}
-    ${caraHtml}
-    ${kelasHtml}
-    ${alasanHtml}
-    <p class="miniHelp" style="margin-top:8px;">Semua angka dipelajari dari ${stat.jumlah} tebangan selesai (${escHtml(namaContoh)}) — tebangan besar lebih menentukan. Naik-turunnya ±${(stat.simpangan*100).toFixed(1)}%${stat.simpangan*100 > 20 ? ' — masih besar, tandai lebih banyak tebangan selesai supaya makin tepat' : ''}.</p>`;
+      ${caraHtml}
+      ${kelasHtml}
+      ${alasanHtml}
+      <p class="miniHelp" style="margin-top:8px;">Dari ${stat.jumlah} tebangan selesai (${escHtml(namaContoh)}). Naik-turun ±${(stat.simpangan*100).toFixed(1)}%. Target laba diatur di Pengaturan.</p>
+    </details>`;
 
+  const rinci = document.getElementById('saranRinci');
+  if(rinci) rinci.addEventListener('toggle', ()=>{ saranRinciBuka = rinci.open; });
   box.querySelectorAll('[data-persenops]').forEach(b=>{
     b.addEventListener('click', ()=>{
-      t.persenOps = Number(b.dataset.persenops);
+      if(b.dataset.persenops === 'data') delete t.persenOps;   // kembali ke angka dari data
+      else t.persenOps = Number(b.dataset.persenops);
       save(); renderSaranBeli();
     });
   });
   const inp = document.getElementById('inputPersenOps');
   if(inp){
     inp.addEventListener('input', ()=>{
-      const v = parseInt(String(inp.value).replace(/[^0-9]/g,''),10);
+      const v = parseFloat(String(inp.value).replace(',', '.').replace(/[^0-9.]/g,''));
       if(isFinite(v) && v > 0 && v < 100){
         t.persenOps = v;
         save();
         // perbarui angka saja supaya ketikan tidak terputus
-        const ops2 = jual * (v/100);
-        const batas2 = jual - ops2 - laba;
-        const sel = box.querySelectorAll('.statLine .val');
-        if(sel[0]) sel[0].textContent = rupiah(batas2);
-        if(sel[1]) sel[1].textContent = rupiah(batas2 * 0.9);
-        if(sel[4]) sel[4].textContent = rupiah(ops2);
+        const B2 = hitungBatas(v);
+        const tulis = (id, n)=>{ const el = document.getElementById(id); if(el) el.textContent = rupiah(n); };
+        [['sbAman', B2.aman], ['sbBersaing', B2.bersaing], ['sbImpas', B2.impas]].forEach(([id, n])=>{
+          tulis(id, n - caloFee); tulis(id + 'T', n);
+        });
+        tulis('sbOps', B2.ops);
+        const perDm3 = isiTotal > 0 ? (B2.bersaing - caloFee) / isiTotal : 0;
+        const d = document.getElementById('sbPerDm3');
+        if(d) d.textContent = 'Rp ' + num(perDm3,0) + '/dm3';
       }
     });
+    // selesai mengetik: gambar ulang semuanya (Pilihan Tawar & tombol ikut menyesuaikan)
+    inp.addEventListener('change', ()=> renderSaranBeli());
   }
 }
 
@@ -6617,6 +6651,7 @@ function renderAll(){
   renderIdentitas();
   renderJenisKayu();
   renderAlbasia();
+  renderTargetLaba();
   renderPengaturanLadig();
  
   renderBeli();
