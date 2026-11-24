@@ -598,7 +598,7 @@
 
 <header>
   <h1><svg class="logoHeader" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5a2b"/><stop offset="1" stop-color="#4a2f16"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#hg)"/><path d="M12.0 41.589078518131025 12.26975304605593 40.03478715752305H13.682745192063182L23.265401018621446 22.41092148186897H26.027158394908348L29.45687569476231 40.03478715752305H31.08823935424341L30.81848630818748 41.589078518131025H22.738740309655107L23.00849335571104 40.03478715752305H24.704083930919737L23.959051708479553 36.116945298139306H17.47213321999172L15.352645000980841 40.03478715752305H17.407906304264117L17.138153258208185 41.589078518131025ZM18.319928507596067 34.56265393753133H23.663607896132582L22.289151899561894 27.227940161439147ZM38.58994311122736 40.03478715752305H40.19561600441742Q42.90599184812224 40.03478715752305 44.49881935816678 38.10797968569498Q46.09164686821131 36.18117221386691 46.82383370750598 31.980731925281717Q47.556020546800646 27.805982402987567 46.643998343468695 25.885597622732256Q45.73197614013674 23.965212842476948 43.0087549132864 23.965212842476948H41.40308202009634ZM31.66628159579183 41.589078518131025 31.936034641847762 40.03478715752305H34.14544054287728L36.95857945174626 23.965212842476948H34.74917355071674L35.01892659677267 22.41092148186897H43.86939558403627Q48.51942428271468 22.41092148186897 50.54899481970691 24.877235045808902Q52.578565356699144 27.34354860974883 51.769306218531355 31.980731925281717Q50.960047080363566 36.643606007105646 48.05699048947594 39.11634226261833Q45.15393389858832 41.589078518131025 40.51675058305543 41.589078518131025Z" fill="#faf5ec"/></svg>Ananda Kayu</h1>
-  <p>Taksiran Pembelian &amp; Laba · v181</p>
+  <p>Taksiran Pembelian &amp; Laba · v183</p>
 </header>
 
 <nav id="tabNav">
@@ -3005,6 +3005,9 @@ function tingkatTupai(x){
 function namaTupai(v){ return ['belum diisi','sedikit','sedang','banyak'][v] || 'belum diisi'; }
 // Akses ke kebun: 0 = belum diisi, 1 dekat, 2 sedang, 3 jauh/sulit.
 // Paling berpengaruh ke biaya operasional (angkut, galang, BBM).
+// Operasional dihitung sebagai persen dari HARGA BELI kayu (cara Bapak menaksir:
+// beli 100 jt, operasional 30% = 30 jt), bukan dari hasil jual.
+function rasioOps(x){ return (x && x.hargaKayu > 0) ? x.ops / x.hargaKayu : 0; }
 function tingkatAkses(x){
   const v = Number(x && x.akses);
   return (v >= 1 && v <= 3) ? v : 0;
@@ -3342,9 +3345,12 @@ function buatCocokSelesai(t){
   const pilihan = pilihK(lain);
   const bert = perkiraanBertingkat(ciriTebangan(t), lain, pilihan.k);
   const jualSaran = taksiran * bert.jual;
-  const opsSaran = jualSaran * (bert.ops > 0 ? bert.ops : 0.3);
+  const pSaran = bert.ops > 0 ? bert.ops : 0.3;                 // operasional ÷ harga beli
+  const cfSaran = (Number(t.ongkosCalo)||0) + (Number(t.fee)||0);
   const labaSaran = jualSaran * targetLabaBersaing() / 100;
-  const beliSaran = jualSaran - opsSaran - labaSaran;     // = Batas Bersaing (total modal)
+  const hSaran = (jualSaran - labaSaran - cfSaran) / (1 + pSaran);  // harga kayu ke petani
+  const opsSaran = hSaran * pSaran;
+  const beliSaran = hSaran + cfSaran;                        // = Batas Bersaing (total modal)
 
   // yang TERJADI
   const jualNyata = r.pendapatan;
@@ -3371,7 +3377,7 @@ function buatCocokSelesai(t){
   };
 
   const bedaJual = (jualNyata - jualSaran) / jualSaran * 100;
-  const opsPersenNyata = jualNyata > 0 ? (opsNyata / jualNyata * 100) : 0;
+  const opsPersenNyata = r.hargaKayu > 0 ? (opsNyata / r.hargaKayu * 100) : 0;
   const nilai = Math.abs(bedaJual) < 10
     ? {teks:'Saran sudah tepat', warna:'var(--green)'}
     : (Math.abs(bedaJual) < 20 ? {teks:'Saran meleset sedang', warna:'var(--brown-700)'}
@@ -3394,7 +3400,7 @@ function buatCocokSelesai(t){
     ${baris('Harga beli', beliSaran, beliNyata, true)}
     ${baris('Laba bersih', labaSaran, labaNyata, false)}
     <div class="statLine" style="background:var(--cream-2); border-radius:10px; padding:10px 12px; margin-top:8px;">
-      <span class="lbl" style="font-size:12px;">Operasional nyatanya <b>${opsPersenNyata.toFixed(1)}%</b> dari hasil jual<br>
+      <span class="lbl" style="font-size:12px;">Operasional nyatanya <b>${opsPersenNyata.toFixed(1)}%</b> dari harga beli<br>
         <span style="font-size:10.5px; color:#a4906f;">${catatanBeli}</span>
       </span>
     </div>`;
@@ -3581,9 +3587,13 @@ function renderSaranBeli(){
   // Tiga batas: dihitung dari target laba (Pengaturan), bukan dari laba rata-rata dulu.
   const tAman = targetLabaAman(), tSaing = targetLabaBersaing();
   const caloFee = (Number(t.ongkosCalo)||0) + (Number(t.fee)||0);
+  // Operasional = p% × harga kayu ke petani (H). Laba target = t% × hasil jual (J).
+  //   J − H − p·H − calo/fee = t·J   →   H = (J·(1 − t) − calo/fee) ÷ (1 + p)
+  // Angka batas yang dikembalikan = total modal (H + calo/fee), seperti sebelumnya.
   const hitungBatas = p=>{
-    const o = jual * (p/100);
-    return {ops:o, aman: jual - o - jual*tAman/100, bersaing: jual - o - jual*tSaing/100, impas: jual - o};
+    const hKayu = t=> (jual * (1 - t/100) - caloFee) / (1 + p/100);
+    const hB = hKayu(tSaing);
+    return {ops: hB * p/100, aman: hKayu(tAman) + caloFee, bersaing: hB + caloFee, impas: hKayu(0) + caloFee};
   };
   const B = hitungBatas(pOps);
   const ops = B.ops;
@@ -3599,7 +3609,7 @@ function renderSaranBeli(){
     // calo & fee ikut dihitung: batas beli adalah total modal
     const modalDeal = deal + caloFee;
     const beda = modalDeal - batasBeli;
-    const labaKalauDeal = jual - ops - modalDeal;
+    const labaKalauDeal = jual - deal * pOps/100 - modalDeal;   // operasional ikut harga deal
     const aman = beda <= 0;
     bandingDeal = `
       <div class="statLine" style="background:${aman?'var(--green-bg)':'var(--red-bg)'}; border-radius:10px; padding:10px 12px; margin-top:8px;">
@@ -3654,7 +3664,7 @@ function renderSaranBeli(){
     ${barisBatas('sbAman', 'AMAN', tAman, B.aman, 'var(--green)')}
     ${barisBatas('sbBersaing', 'BERSAING', tSaing, B.bersaing, 'var(--brown-700)')}
     ${barisBatas('sbImpas', 'IMPAS', 0, B.impas, 'var(--red)')}
-    <p class="miniHelp" style="margin:4px 0 0;">Patokan <b id="sbPerDm3">Rp ${num(batasPerDm3,0)}/dm3</b> · Operasional <b>${String(pOps).replace('.', ',')}%</b></p>
+    <p class="miniHelp" style="margin:4px 0 0;">Patokan <b id="sbPerDm3">Rp ${num(batasPerDm3,0)}/dm3</b> · Operasional <b>${String(pOps).replace('.', ',')}%</b> dari harga beli</p>
     ${bandingDeal}
 
     <details id="saranRinci" style="margin-top:10px;" ${saranRinciBuka ? 'open' : ''}>
@@ -3677,7 +3687,7 @@ function renderSaranBeli(){
       <div style="display:flex; align-items:center; gap:8px;">
         <input type="text" inputmode="decimal" id="inputPersenOps" value="${String(pOps).replace('.', ',')}"
           style="width:70px; border:1px solid var(--line); border-radius:8px; padding:8px; font-size:13px; text-align:center; background:#fff;">
-        <span style="font-size:11.5px; color:#a4906f;">% isi sendiri</span>
+        <span style="font-size:11.5px; color:#a4906f;">% dari harga beli · isi sendiri</span>
       </div>
 
       ${caraHtml}
@@ -6179,6 +6189,7 @@ function kumpulkanAkurasi(){
       taksiran,
       jual: r.pendapatan,
       beli: r.biayaBeli,
+      hargaKayu: r.hargaKayu,                // harga kayu ke petani (tanpa calo/fee)
       ops: r.opsCalc.totalOps,
       laba: r.laba,
       rasioJual: r.pendapatan / taksiran,   // taksiran × rasio = hasil jual
@@ -6274,7 +6285,7 @@ function langkahKemiripan(ciri){
   return L;
 }
 function perkiraanBertingkat(ciri, data, k){
-  const ukur = {jual: x=> x.rasioJual, laba: x=> x.rasioLaba, ops: x=> x.jual > 0 ? x.ops / x.jual : 0};
+  const ukur = {jual: x=> x.rasioJual, laba: x=> x.rasioLaba, ops: x=> rasioOps(x)};
   const langkah = langkahKemiripan(ciri);
   const out = {nSemua: data.length, tingkat: {}};
   Object.keys(ukur).forEach(u=>{
@@ -6320,7 +6331,7 @@ function statistikAkurasi(data){
     bobotTotal += bobot;
     jJual += x.rasioJual * bobot;
     jLaba += x.rasioLaba * bobot;
-    jOps  += (x.jual > 0 ? x.ops / x.jual : 0) * bobot;
+    jOps  += rasioOps(x) * bobot;
   });
   const rataJual = jJual / bobotTotal;
   const rataLaba = jLaba / bobotTotal;
@@ -6332,7 +6343,7 @@ function statistikAkurasi(data){
   const simpangan = Math.sqrt(varian / data.length);
 
   // rentang operasional yang pernah terjadi — berguna sebagai pagar bawah/atas
-  const daftarOps = data.map(x=> x.jual > 0 ? (x.ops / x.jual) : 0).filter(x=> x > 0);
+  const daftarOps = data.map(x=> rasioOps(x)).filter(x=> x > 0);
   const opsMin = daftarOps.length ? Math.min(...daftarOps) : porsiOps;
   const opsMax = daftarOps.length ? Math.max(...daftarOps) : porsiOps;
 
@@ -6502,17 +6513,18 @@ function renderSaranTawar(){
   const labaPerkiraan = taksiranSimulasi * stat.rataLaba;
   const jualBawah = taksiranSimulasi * (stat.rataJual - stat.simpangan);
   const jualAtas  = taksiranSimulasi * (stat.rataJual + stat.simpangan);
-  // Operasional dihitung dari persen hasil jual (ikut pengaturan tebangan aktif)
-  const pOps = persenOps(getActive());
-  const opsPerkiraan = jualPerkiraan * (pOps/100);
-  const batasBeli = jualPerkiraan - opsPerkiraan - labaPerkiraan;
+  // Operasional = persen dari harga beli (isian tebangan aktif, atau rata-rata data)
+  const pAktif = Number(getActive().persenOps);
+  const pOps = pAktif > 0 ? pAktif : (stat.porsiOps > 0 ? Math.round(stat.porsiOps * 1000) / 10 : 30);
+  const batasBeli = (jualPerkiraan - labaPerkiraan) / (1 + pOps/100);
+  const opsPerkiraan = batasBeli * pOps/100;
 
   box.innerHTML = `
     <div class="statLine" style="background:var(--cream-2); border-radius:10px; padding:10px 12px; font-weight:800;">
       <span class="lbl">PERKIRAAN HASIL JUAL</span><span class="val">${rupiah(jualPerkiraan)}</span>
     </div>
     <div class="statLine"><span class="lbl">Rentang wajar</span><span class="val" style="font-size:12px;">${rupiah(jualBawah)} – ${rupiah(jualAtas)}</span></div>
-    <div class="statLine"><span class="lbl">Perkiraan biaya operasional<br><span style="font-size:10.5px; color:#a4906f;">${pOps}% dari hasil jual</span></span><span class="val">${rupiah(opsPerkiraan)}</span></div>
+    <div class="statLine"><span class="lbl">Perkiraan biaya operasional<br><span style="font-size:10.5px; color:#a4906f;">${String(pOps).replace('.', ',')}% dari harga beli</span></span><span class="val">${rupiah(opsPerkiraan)}</span></div>
     <div class="statLine" style="background:var(--green-bg); border-radius:10px; padding:10px 12px; margin-top:6px; font-weight:800;">
       <span class="lbl">PERKIRAAN LABA BERSIH</span><span class="val" style="color:${labaPerkiraan<0?'var(--red)':'var(--green)'};">${rupiah(labaPerkiraan)}</span>
     </div>
